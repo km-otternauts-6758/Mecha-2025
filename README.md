@@ -17,7 +17,7 @@ Mecanum for the 2025 season
 6. Clone repository
 
     ```console
-    git clone https://github.com/km-otternauts-6758/robot-2023.git
+    git clone https://github.com/km-otternauts-6758/Mecha-2025.git
     ```
 
 7. Open source code directory
