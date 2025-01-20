@@ -1,50 +1,85 @@
-from rev import SparkMax
 import wpilib
-from wpilib.drive import MecanumDrive
+
+from subsystems import drivetrain
+from subsystems import recipmotors
+from wpilib import SendableChooser, SmartDashboard
+from rev import SparkMax
+
+# import navx
 
 
 class MyRobot(wpilib.TimedRobot):
     def robotInit(self):
         """Robot initialization function"""
-        self.frontLeftMotor = SparkMax(4, SparkMax.MotorType.kBrushless)
-        self.rearLeftMotor = SparkMax(1, SparkMax.MotorType.kBrushless)
-        self.frontRightMotor = SparkMax(2, SparkMax.MotorType.kBrushless)
-        self.rearRightMotor = SparkMax(3, SparkMax.MotorType.kBrushless)
+        # DriveTrain
+        self.drive = drivetrain.DriveTrain(4, 2, 1, 3)
 
-        # invert the left side motors
-        self.rearLeftMotor.setInverted(True)
-        self.frontLeftMotor.setInverted(True)
-        # you may need to change or remove this to match your robot
-        self.frontRightMotor.setInverted(True)
-        self.rearRightMotor.setInverted(True)
-        
-        self.drive = MecanumDrive(
-            self.frontLeftMotor,
-            self.rearLeftMotor,
-            self.frontRightMotor,
-            self.rearRightMotor,
-        )
         # Define the Xbox Controller.
-        self.stick = wpilib.XboxController(1)
-        
-        
+        self.stick = wpilib.XboxController(0)
+
+        # Create Elevator
+        self.elevator = recipmotors.ReciprocalMotors(9, 10)
+
+        # Create Gyro
+        # self.gyro = navx.AHRS.create_spi()
+
+        # Shoulder
+        self.shoulder = SparkMax(5, SparkMax.MotorType.kBrushless)
+
+        # Intake
+        self.intake = SparkMax(6, SparkMax.MotorType.kBrushless)
+        # self.drive.frontLeftEncoder.
 
     def teleopInit(self):
-        self.drive.setSafetyEnabled(True)
-        
-
+        pass
 
     def teleopPeriodic(self):
-        """Runs the motors with Mecanum drive."""
-        self.speed = -self.stick.getLeftX()
-           
-        self.turn =  self.stick.getRightX()
-            
-        self.strafe = self.stick.getLeftY()
-        # Use the joystick X axis for lateral movement, Y axis for forward movement, and Z axis for rotation.
-        # This sample does not use field-oriented drive, so the gyro input is set to zero.
-        # This Stick configuration is created by K.E. on our team.  Left stick Y axis is speed, Left Stick X axis is strafe, and Right Stick Y axis is turn.
+        # """Runs the motors with Mecanum drive."""
+        self.speed = self.stick.getLeftY()
 
-        self.drive.driveCartesian(
-            self.speed, self.turn, self.strafe
-        )
+        self.turn = -self.stick.getLeftX()
+
+        self.strafe = -self.stick.getRightX()
+        # # Use the joystick X axis for lateral movement, Y axis for forward movement, and Z axis for rotation.
+        # # This sample does not use field-oriented drive, so the gyro input is set to zero.
+        # # This Stick configuration is created by K.E. on our team.  Left stick Y axis is speed, Left Stick X axis is strafe, and Right Stick Y axis is turn.
+        self.drive.driveCartesian(self.speed, self.strafe, self.turn)
+        # , self.gyro.getRotation2d()
+        # Make preset levels 1-4\, winch makes it stop so gotta make a down function
+        # self.elevator.set(self.stick.getYButton())
+
+        # ELEVATOR D-PAD/POV CONTROL
+        if self.stick.getPOV() == -1:
+            self.elevator.set(0)
+
+        if self.stick.getPOV() == 0:
+            self.elevator.set(0.5)
+
+        if self.stick.getPOV() == 180:
+            self.elevator.set(0.025)
+
+        # SHOULDER SHIT
+        if self.stick.getRawButton(5):
+            self.shoulder.set(0.4)
+        elif self.stick.getRawButton(6):
+            self.shoulder.set(-0.4)
+        else:
+            self.shoulder.set(0)
+
+        # Intake
+        if self.stick.getRawButton(1):
+            self.intake.set(0.1)
+        elif self.stick.getRawButton(4):
+            self.intake.set(-0.1)
+        else:
+            self.intake.set(0)
+
+        # HEX ENCODER STUFF FROM LAST YEAR, SAVING FOR LATER
+        # if self.joystick.getRawButton(6):
+        #     self.shoulder.set(0.3)
+        #     if self.dutyCycle.getOutput() == 0.9750:
+        #         self.shoulder.set(0)
+        # if self.joystick.getRawButton(4):
+        #     self.shoulder.set(0.3)
+        #     if self.dutyCycle.getOutput() == 0.778:
+        #         self.shoulder.set(0)
