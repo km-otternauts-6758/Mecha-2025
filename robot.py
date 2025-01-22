@@ -29,9 +29,15 @@ class MyRobot(wpilib.TimedRobot):
         # Intake
         self.intake = SparkMax(6, SparkMax.MotorType.kBrushless)
         # self.drive.frontLeftEncoder.
-
+    
+    def apply_deadzone(self, value, deadzone):
+        if abs(value) < deadzone:
+            return 0
+        else:
+            return value
+    
     def teleopInit(self):
-        pass
+        self.drive.setDeadBand(.2)
 
     def teleopPeriodic(self):
         # """Runs the motors with Mecanum drive."""

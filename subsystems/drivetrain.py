@@ -107,3 +107,5 @@ class DriveTrain:
     #     return (
     #         self.frontLeftEncoder.getVelocity() + self.rearLeftEncoder.getVelocity()
     #     ) / 2
+    def setDeadBand(self, deadband: float):
+            self.drive.setDeadband(deadband)
