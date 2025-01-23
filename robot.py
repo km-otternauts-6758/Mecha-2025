@@ -1,11 +1,22 @@
 import wpilib
+from wpimath.controller import PIDController
 
 from subsystems import drivetrain
 from subsystems import recipmotors
-from wpilib import SendableChooser, SmartDashboard
-from rev import SparkMax
+from subsystems import elevator
 
-# import navx
+from wpilib import SendableChooser, SmartDashboard, DutyCycleEncoder
+from rev import (
+    SparkMax,
+    ClosedLoopConfig,
+    ClosedLoopConfigAccessor,
+    SparkMaxAlternateEncoder,
+)
+
+kP = 12
+kI = 0
+kD = 0
+setpoint = 0.523
 
 
 class MyRobot(wpilib.TimedRobot):
@@ -18,22 +29,47 @@ class MyRobot(wpilib.TimedRobot):
         self.stick = wpilib.XboxController(0)
 
         # Create Elevator
-        self.elevator = recipmotors.ReciprocalMotors(9, 10)
-
+        # self.elevator = elevator.Elevator(10)
+        self.elevator = SparkMax(10, SparkMax.MotorType.kBrushless)
+        # self.elevatorEncoder = self.elevator.getEncoder()
+        # self.elevatorEncoder
         # Create Gyro
         # self.gyro = navx.AHRS.create_spi()
 
         # Shoulder
         self.shoulder = SparkMax(5, SparkMax.MotorType.kBrushless)
+        self.shoulder.setInverted(True)
+        # self.shoulderEncoder = self.shoulder.getEncoder()
 
         # Intake
         self.intake = SparkMax(6, SparkMax.MotorType.kBrushless)
         # self.drive.frontLeftEncoder.
 
+        # DUTY CYCLE ENCODER - make sure sparkmax is set to Alternate Encoder in the client
+        self.dutyCycle = wpilib.DutyCycle(wpilib.DigitalInput(0))
+
+        # PID SHIT
+        # Creates a PIDController with gains kP, kI, and kD
+        self.pid = PIDController(kP, kI, kD)
+        # Enables continuous input on a range from -180 to 180
+        # self.pid.enableContinuousInput(-180, 180)
+
     def teleopInit(self):
-        pass
+        self.drive.setDeadBand(0.5)
 
     def teleopPeriodic(self):
+        # SmartDashboard.putNumber("boreEncoder", self.dutyCycle.getOutput())
+        # SmartDashboard.putNumber("P", PIDController.getP())
+        # SmartDashboard.putNumber("I", PIDController.getI())
+        # SmartDashboard.putNumber("D", PIDController.getD())
+        # SmartDashboard.putNumber("PID", self.pid.getError())
+        # SmartDashboard.putNumber(
+        #     "ShoulderOutputCurrent", self.shoulder.getOutputCurrent()
+        # )
+
+        print("boreEncoder", self.dutyCycle.getOutput())
+        print("PID", self.pid.getError())
+        print("test", self.pid.calculate(self.dutyCycle.getOutput(), setpoint))
         # """Runs the motors with Mecanum drive."""
         self.speed = self.stick.getLeftY()
 
@@ -53,18 +89,21 @@ class MyRobot(wpilib.TimedRobot):
             self.elevator.set(0)
 
         if self.stick.getPOV() == 0:
-            self.elevator.set(0.5)
+            self.elevator.set(1)
 
         if self.stick.getPOV() == 180:
-            self.elevator.set(0.025)
+            self.elevator.set(-1)
 
-        # SHOULDER SHIT
-        if self.stick.getRawButton(5):
-            self.shoulder.set(0.4)
-        elif self.stick.getRawButton(6):
-            self.shoulder.set(-0.4)
-        else:
-            self.shoulder.set(0)
+        # # SHOULDER SHIT
+        # if self.stick.getRawButton(5):
+        #     self.shoulder.set(0.4)
+        # elif self.stick.getRawButton(6):
+        #     self.shoulder.set(-0.4)
+        # else:
+        #     self.shoulder.set(0)
+
+        self.shoulder.set(self.pid.calculate(self.dutyCycle.getOutput(), setpoint))
+        # self.pid.enableContinuousInput(-180, 180)
 
         # Intake
         if self.stick.getRawButton(1):
@@ -74,12 +113,12 @@ class MyRobot(wpilib.TimedRobot):
         else:
             self.intake.set(0)
 
-        # HEX ENCODER STUFF FROM LAST YEAR, SAVING FOR LATER
-        # if self.joystick.getRawButton(6):
+        # # HEX ENCODER STUFF FROM LAST YEAR, SAVING FOR LATER
+        # if self.stick.getRawButton(6):
         #     self.shoulder.set(0.3)
-        #     if self.dutyCycle.getOutput() == 0.9750:
+        #     if DutyCycleEncoder.getOutput() == 0.9750:
         #         self.shoulder.set(0)
-        # if self.joystick.getRawButton(4):
+        # if self.stick.getRawButton(4):
         #     self.shoulder.set(0.3)
         #     if self.dutyCycle.getOutput() == 0.778:
         #         self.shoulder.set(0)
