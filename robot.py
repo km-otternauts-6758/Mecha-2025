@@ -1,11 +1,19 @@
 import wpilib
 from wpimath.controller import PIDController
 
+from networktables import NetworkTables
+
+# from subsystems.limelight import LimeLight
+from constants import Constants
 from subsystems import drivetrain
 from subsystems import recipmotors
-from subsystems import elevator
+from subsystems import wrist
 
-from wpilib import SendableChooser, SmartDashboard, DutyCycleEncoder
+from wpilib.shuffleboard import Shuffleboard
+
+from wpilib import SendableChooser, SmartDashboard, DutyCycleEncoder, CAN, DigitalInput
+
+import rev
 from rev import (
     SparkMax,
     ClosedLoopConfig,
@@ -13,10 +21,13 @@ from rev import (
     SparkMaxAlternateEncoder,
 )
 
-kP = 12
-kI = 0
-kD = 0
-setpoint = 0.523
+shoulderkP = 0
+shoulderkI = 0
+shoulderkD = 0
+
+elevatorkP = 0.05
+elevatorkI = 0.003
+elevatorkD = 0.005
 
 
 class MyRobot(wpilib.TimedRobot):
@@ -25,100 +36,156 @@ class MyRobot(wpilib.TimedRobot):
         # DriveTrain
         self.drive = drivetrain.DriveTrain(4, 2, 1, 3)
 
-        # Define the Xbox Controller.
+        # Xbox Controller.
         self.stick = wpilib.XboxController(0)
 
+        # Added Limelight
+        NetworkTables.initialize(server="10.67.58.2")
+        self.limeLight = NetworkTables.getTable("limelight-kmrobot")
+        self.tx = self.limeLight.getEntry("tx")
+
         # Create Elevator
-        # self.elevator = elevator.Elevator(10)
-        self.elevator = SparkMax(10, SparkMax.MotorType.kBrushless)
-        # self.elevatorEncoder = self.elevator.getEncoder()
-        # self.elevatorEncoder
+        self.elevator = SparkMax(9, SparkMax.MotorType.kBrushless)
+        self.elevator.setInverted(True)
+        self.elevatorEncoder = self.elevator.getEncoder()
+
         # Create Gyro
         # self.gyro = navx.AHRS.create_spi()
 
-        # Shoulder
-        self.shoulder = SparkMax(5, SparkMax.MotorType.kBrushless)
-        self.shoulder.setInverted(True)
-        # self.shoulderEncoder = self.shoulder.getEncoder()
+        # Create Limit Switch
+        self.limitSwitch = DigitalInput(0)
 
-        # Intake
-        self.intake = SparkMax(6, SparkMax.MotorType.kBrushless)
-        # self.drive.frontLeftEncoder.
+        # Shuffleboard
+        tab = Shuffleboard.getTab("Pid")
+        tab.addNumber
+        # Shoulder
+        # self.shoulder = SparkMax(5, SparkMax.MotorType.kBrushless)
+        # self.shoulder.setInverted(True)
+
+        # # Intake
+        # self.intake = SparkMax(6, SparkMax.MotorType.kBrushless)
+
+        # # Wrist
+        # self.wrist = wrist.Wrist(7)
+        # self.wristSetPoint = 0.4
 
         # DUTY CYCLE ENCODER - make sure sparkmax is set to Alternate Encoder in the client
-        self.dutyCycle = wpilib.DutyCycle(wpilib.DigitalInput(0))
+        self.dutyCycle = wpilib.DutyCycle(wpilib.DigitalInput(1))
 
-        # PID SHIT
-        # Creates a PIDController with gains kP, kI, and kD
-        self.pid = PIDController(kP, kI, kD)
-        # Enables continuous input on a range from -180 to 180
-        # self.pid.enableContinuousInput(-180, 180)
+        self.elevatorDutyCycle = wpilib.DutyCycle(wpilib.DigitalInput(0))
+
+        # PID STUFF
+        # self.shoulderPid = PIDController(shoulderkP, shoulderkI, shoulderkD)
+        # self.shoulderSetpoint = 0.4
+
+        self.elevatorPid = PIDController(elevatorkP, elevatorkI, elevatorkD)
+        self.elevatorSetpoint = 40
 
     def teleopInit(self):
-        self.drive.setDeadBand(0.5)
+        self.drive.setDeadBand(0.99)
+
+        self.elevatorEncoder.setPosition(0)
 
     def teleopPeriodic(self):
-        # SmartDashboard.putNumber("boreEncoder", self.dutyCycle.getOutput())
-        # SmartDashboard.putNumber("P", PIDController.getP())
-        # SmartDashboard.putNumber("I", PIDController.getI())
-        # SmartDashboard.putNumber("D", PIDController.getD())
-        # SmartDashboard.putNumber("PID", self.pid.getError())
-        # SmartDashboard.putNumber(
-        #     "ShoulderOutputCurrent", self.shoulder.getOutputCurrent()
-        # )
-
+        self.drive.setDeadBand(0.99)
+        print(self.tx)
         print("boreEncoder", self.dutyCycle.getOutput())
-        print("PID", self.pid.getError())
-        print("test", self.pid.calculate(self.dutyCycle.getOutput(), setpoint))
+        print("PID", self.elevatorPid.getError())
+        print("WinchEncoder", self.elevatorEncoder.getPosition())
+
         # """Runs the motors with Mecanum drive."""
         self.speed = self.stick.getLeftY()
 
         self.turn = -self.stick.getLeftX()
 
         self.strafe = -self.stick.getRightX()
-        # # Use the joystick X axis for lateral movement, Y axis for forward movement, and Z axis for rotation.
-        # # This sample does not use field-oriented drive, so the gyro input is set to zero.
-        # # This Stick configuration is created by K.E. on our team.  Left stick Y axis is speed, Left Stick X axis is strafe, and Right Stick Y axis is turn.
+
         self.drive.driveCartesian(self.speed, self.strafe, self.turn)
         # , self.gyro.getRotation2d()
-        # Make preset levels 1-4\, winch makes it stop so gotta make a down function
-        # self.elevator.set(self.stick.getYButton())
 
-        # ELEVATOR D-PAD/POV CONTROL
-        if self.stick.getPOV() == -1:
+        # # SHOULDER PID STUFF
+        # self.shoulder.set(
+        #     self.shoulderPid.calculate(
+        #         self.dutyCycle.getOutput(), self.shoulderSetpoint
+        #     )
+        # )
+
+        # ELEVATOR PID STUFF
+
+        # self.elevator.set(0.3)
+
+        # # Elevator Manual Control
+        # if self.stick.getRawButton(6):
+        #     self.elevator.set(0.5)
+
+        # elif self.stick.getRawButton(4):
+        #     self.elevator.set(-0.5)
+
+        # else:
+        #     self.elevator.set(0)
+
+        # POV ELEVATOR CONTROLS
+        if self.stick.getPOV() == 0:
+            self.elevator.set(
+                self.elevatorPid.calculate(self.elevatorEncoder.getPosition(), 80)
+            )
+        elif self.stick.getPOV() == 90:
+            self.elevator.set(
+                self.elevatorPid.calculate(self.elevatorEncoder.getPosition(), 60)
+            )
+        elif self.stick.getPOV() == 180:
+            self.elevator.set(
+                self.elevatorPid.calculate(self.elevatorEncoder.getPosition(), 40)
+            )
+        elif self.stick.getPOV() == 270:
+            self.elevator.set(
+                self.elevatorPid.calculate(self.elevatorEncoder.getPosition(), 20)
+            )
+        elif self.stick.getRawButton(7):
+            self.elevator.set(
+                self.elevatorPid.calculate(self.elevatorEncoder.getPosition(), 0)
+            )
+        elif self.stick.getRawButton(4):
+            self.elevator.set(-0.5)
+        elif self.stick.getRawButton(6):
+            self.elevator.set(0.5)
+        else:
             self.elevator.set(0)
 
-        if self.stick.getPOV() == 0:
-            self.elevator.set(1)
+        if self.limitSwitch.get():
+            self.elevatorEncoder.setPosition(0)
+        # # # WRIST PID STUFF
+        # self.wrist.set(
+        #     self.wrist.wristPid.calculate(
+        #         self.wrist.wristEncoder.getPosition(), self.wristSetPoint
+        #     )
+        # )
 
-        if self.stick.getPOV() == 180:
-            self.elevator.set(-1)
+        # # SHOULDER SETPOINT BUTTONS
+        # if self.stick.getRawButton(1):
+        #     self.shoulderSetpoint = 0.5
 
-        # # SHOULDER SHIT
-        # if self.stick.getRawButton(5):
-        #     self.shoulder.set(0.4)
-        # elif self.stick.getRawButton(6):
-        #     self.shoulder.set(-0.4)
+        # if self.stick.getRawButton(2):
+        #     self.shoulderSetpoint = 0.6
+
+        # if self.stick.getRawButton(3):
+        #     self.shoulderSetpoint = 0.7
+
+        # # ELEVATOR SETPOINT BUTTONS
+        # if self.stick.getPOV(0):
+        #     self.elevatorSetpoint = 0.5
+
+        # if self.stick.getPOV(90):
+        #     self.elevatorSetpoint = 0.6
+
+        # if self.stick.getPOV(180):
+        #     self.elevatorSetpoint = 0.7
+
+        # if self.stick.getPOV(270):
+        #     self.elevatorSetpoint = 0.8
+
+        # # INTAKE
+        # if self.stick.getRightTriggerAxis() >= 0.9:
+        #     self.intake.set(0.1)
         # else:
-        #     self.shoulder.set(0)
-
-        self.shoulder.set(self.pid.calculate(self.dutyCycle.getOutput(), setpoint))
-        # self.pid.enableContinuousInput(-180, 180)
-
-        # Intake
-        if self.stick.getRawButton(1):
-            self.intake.set(0.1)
-        elif self.stick.getRawButton(4):
-            self.intake.set(-0.1)
-        else:
-            self.intake.set(0)
-
-        # # HEX ENCODER STUFF FROM LAST YEAR, SAVING FOR LATER
-        # if self.stick.getRawButton(6):
-        #     self.shoulder.set(0.3)
-        #     if DutyCycleEncoder.getOutput() == 0.9750:
-        #         self.shoulder.set(0)
-        # if self.stick.getRawButton(4):
-        #     self.shoulder.set(0.3)
-        #     if self.dutyCycle.getOutput() == 0.778:
-        #         self.shoulder.set(0)
+        #     self.intake.set(0)
